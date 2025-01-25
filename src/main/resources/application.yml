@@ -40,6 +40,13 @@ spring:
     multipart:
       # 大小限制
       max-file-size: 10MB
+## 讯飞星火 AI 配置
+xun-fei:
+  client:
+    appId: 9dfb9142
+    apiSecret: ZWQ3MGIzNWVkNzcwMjk2ZGVlZTViNTIw
+    apiKey: 2bee8edb557b8d35e28640bd612c0fc8
+
 server:
   address: 0.0.0.0
   port: 8101

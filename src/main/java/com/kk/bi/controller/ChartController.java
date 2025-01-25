@@ -13,11 +13,13 @@ import com.kk.bi.constant.FileConstant;
 import com.kk.bi.constant.UserConstant;
 import com.kk.bi.exception.BusinessException;
 import com.kk.bi.exception.ThrowUtils;
+import com.kk.bi.manager.AIManager;
 import com.kk.bi.model.dto.chart.*;
 import com.kk.bi.model.dto.file.UploadFileRequest;
 import com.kk.bi.model.entity.Chart;
 import com.kk.bi.model.entity.User;
 import com.kk.bi.model.enums.FileUploadBizEnum;
+import com.kk.bi.model.vo.BiResponse;
 import com.kk.bi.service.ChartService;
 import com.kk.bi.service.UserService;
 import com.kk.bi.utils.ExcelUtils;
@@ -50,18 +52,21 @@ public class ChartController {
     @Resource
     private UserService userService;
 
+    @Resource
+    private AIManager aiManager;
+
     private final static Gson GSON = new Gson();
 
     /**
      * 智能分析
      *
      * @param multipartFile
-     * @param uploadFileRequest
+     * @param genChartByAiRequest
      * @param request
      * @return
      */
     @PostMapping("/gen")
-    public BaseResponse<String> genChartByAi(@RequestPart("file") MultipartFile multipartFile,
+    public BaseResponse<BiResponse> genChartByAi(@RequestPart("file") MultipartFile multipartFile,
                                              GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
         String goal = genChartByAiRequest.getGoal();
         String name = genChartByAiRequest.getName();
@@ -70,45 +75,45 @@ public class ChartController {
         //校验
         ThrowUtils.throwIf(StringUtils.isBlank(goal),ErrorCode.PARAMS_ERROR,"分析目标为空");
         ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR,"图表名称过长");
+        User loginUser = userService.getLoginUser(request);
         // 用户输入
         StringBuilder userInput = new StringBuilder();
-        userInput.append("你是一个数据分析师，接下来我会给你我的分析目标和原始数据，请告诉我分析结论。").append("\n");
-        userInput.append("分析目标:" + goal).append("\n");
-        // 压缩后的数据
-        String result = ExcelUtils.excelToCsv(multipartFile);
-        userInput.append("数据:" + result).append("\n");
-        return ResultUtils.success(userInput.toString());
-        /*String biz = uploadFileRequest.getBiz();
-        FileUploadBizEnum fileUploadBizEnum = FileUploadBizEnum.getEnumByValue(biz);
-        if (fileUploadBizEnum == null) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        userInput.append("分析需求:").append("\n");
+        if (StringUtils.isNotBlank(chartType)) {
+            goal += "请使用" + chartType;
         }
-        validFile(multipartFile, fileUploadBizEnum);
-        User loginUser = userService.getLoginUser(request);
-        // 文件目录：根据业务、用户来划分
-        String uuid = RandomStringUtils.randomAlphanumeric(8);
-        String filename = uuid + "-" + multipartFile.getOriginalFilename();
-        String filepath = String.format("/%s/%s/%s", fileUploadBizEnum.getValue(), loginUser.getId(), filename);
-        File file = null;
-        try {
-            // 上传文件
-            file = File.createTempFile(filepath, null);
-            multipartFile.transferTo(file);
-            cosManager.putObject(filepath, file);
-            // 返回可访问地址
-            return ResultUtils.success(FileConstant.COS_HOST + filepath);
-        } catch (Exception e) {
-            log.error("file upload error, filepath = " + filepath, e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传失败");
-        } finally {
-            if (file != null) {
-                // 删除临时文件
-                boolean delete = file.delete();
-                if (!delete) {
-                    log.error("file delete error, filepath = {}", filepath);
-                }
-            }
-        }*/
+        userInput.append(goal).append("\n");
+        // 压缩后的数据
+        String csvData = ExcelUtils.excelToCsv(multipartFile);
+        userInput.append("原始数据:").append("\n");
+        userInput.append(csvData).append("\n");
+
+        String aiAnswer = aiManager.sendMsgToAI(true,userInput.toString());
+        String[] splits = aiAnswer.split("```");
+        if (splits.length < 3) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "AI 生成错误");
+        }
+        // 生成的图表代码
+        String genChart = splits[1].trim().substring(4);
+        // 生成的分析结论
+        String genResult = splits[2].trim().substring(3);
+        // 保存到数据库
+        Chart chart = new Chart();
+        chart.setGoal(goal);
+        chart.setName(name);
+        chart.setChartData(csvData);
+        chart.setChartType(chartType);
+        chart.setGenChart(genChart);
+        chart.setGenResult(genResult);
+        chart.setUserId(loginUser.getId());
+        boolean saveResult = chartService.save(chart);
+        ThrowUtils.throwIf(!saveResult,ErrorCode.SYSTEM_ERROR,"图表保存失败！");
+
+        BiResponse biResponse = new BiResponse();
+        biResponse.setGenChart(genChart);
+        biResponse.setGenResult(genResult);
+        biResponse.setChartId(chart.getId());
+        return ResultUtils.success(biResponse);
     }
 
     // region 增删改查
