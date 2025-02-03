@@ -1,5 +1,6 @@
 package com.kk.bi.controller;
 
+import cn.hutool.core.io.FileUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.google.gson.Gson;
@@ -14,6 +15,7 @@ import com.kk.bi.constant.UserConstant;
 import com.kk.bi.exception.BusinessException;
 import com.kk.bi.exception.ThrowUtils;
 import com.kk.bi.manager.AIManager;
+import com.kk.bi.manager.RedisLimiterManager;
 import com.kk.bi.model.dto.chart.*;
 import com.kk.bi.model.dto.file.UploadFileRequest;
 import com.kk.bi.model.entity.Chart;
@@ -35,6 +37,8 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.io.File;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * 帖子接口
@@ -54,6 +58,9 @@ public class ChartController {
 
     @Resource
     private AIManager aiManager;
+
+    @Resource
+    private RedisLimiterManager redisLimiterManager;
 
     private final static Gson GSON = new Gson();
 
@@ -75,7 +82,20 @@ public class ChartController {
         //校验
         ThrowUtils.throwIf(StringUtils.isBlank(goal),ErrorCode.PARAMS_ERROR,"分析目标为空");
         ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR,"图表名称过长");
+        // 校验文件
+        long size = multipartFile.getSize();
+        String filename = multipartFile.getOriginalFilename();
+        final long ONE_MB = 1024L * 1024L;
+        ThrowUtils.throwIf(size > ONE_MB, ErrorCode.PARAMS_ERROR, "文件大于1MB");
+        // 校验文件后缀
+        String suffix = FileUtil.getSuffix(filename);
+        final List<String> validFileSuffixList = Arrays.asList("png", "jpg", "svg", "webp", "jpeg");
+        ThrowUtils.throwIf(validFileSuffixList.contains(suffix), ErrorCode.PARAMS_ERROR, "不支持该类型文件");
+
         User loginUser = userService.getLoginUser(request);
+        // 限流判断，每个用户一个限流器
+        String key = "genChartByAi_" + loginUser.getId();
+        redisLimiterManager.doRateLimit(key);
         // 用户输入
         StringBuilder userInput = new StringBuilder();
         userInput.append("分析需求:").append("\n");
