@@ -40,6 +40,12 @@ spring:
     multipart:
       # 大小限制
       max-file-size: 10MB
+ # RabbitMQ 配置
+  rabbitmq:
+    host: 10.159.0.101
+    port: 5672
+    username: root
+    password: 123456
 ## 讯飞星火 AI 配置
 xun-fei:
   client:
