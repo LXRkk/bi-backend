@@ -119,10 +119,11 @@ public class ChartController {
         if (splits.length < 3) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "AI 生成错误");
         }
+        System.out.println(splits[1].trim());
         // 生成的图表代码
-        String genChart = splits[1].trim().substring(4);
+        String genChart = splits[1].trim();
         // 生成的分析结论
-        String genResult = splits[2].trim().substring(3);
+        String genResult = splits[2].trim();
         // 保存到数据库
         Chart chart = new Chart();
         chart.setGoal(goal);
@@ -132,6 +133,7 @@ public class ChartController {
         chart.setGenChart(genChart);
         chart.setGenResult(genResult);
         chart.setUserId(loginUser.getId());
+        chart.setStatus(TaskStatus.SUCCEED.getMessage());
         boolean saveResult = chartService.save(chart);
         ThrowUtils.throwIf(!saveResult, ErrorCode.SYSTEM_ERROR, "图表保存失败！");
 
@@ -221,7 +223,7 @@ public class ChartController {
                 // 生成的图表代码
                 String genChart = splits[1].trim().substring(4);
                 // 生成的分析结论
-                String genResult = splits[2].trim().substring(3);
+                String genResult = splits[2].trim();
                 Chart updateSuccessChart = new Chart();
                 updateSuccessChart.setId(chart.getId());
                 updateSuccessChart.setGenChart(genChart);

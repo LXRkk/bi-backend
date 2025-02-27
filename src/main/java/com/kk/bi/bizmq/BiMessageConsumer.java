@@ -70,9 +70,9 @@ public class BiMessageConsumer {
             return;
         }
         // 生成的图表代码
-        String genChart = splits[1].trim().substring(4);
+        String genChart = splits[1].trim();
         // 生成的分析结论
-        String genResult = splits[2].trim().substring(3);
+        String genResult = splits[2].trim();
         Chart updateSuccessChart = new Chart();
         updateSuccessChart.setId(chart.getId());
         updateSuccessChart.setGenChart(genChart);
